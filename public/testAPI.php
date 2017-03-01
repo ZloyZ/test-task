@@ -1,228 +1,67 @@
 <?php
 namespace testAPI
 {
-	class request
-	{}
+    require_once('Base.php');
+    require_once('GetFileList.php');
+    require_once('GetFileMetadata.php');
+    require_once('GetFile.php');
+    require_once('LoadFile.php');	
 	
-	class responce
-	{
-		public $status;
-	}
-	
-	class getFileListRequest extends request
-	{
-		public $directory;
-	}
-	
-	class getFileListResponce extends responce
-	{
-		public $fileNames = array();
-	}
-	
-	const OK = 200;
-	const BadRequest = 400;
-	const Forbidden = 403;
-	const NotFound = 404;
-	const Conflict = 409;
-	const InternalError = 500;
-	
-	function getFileList(getFileListRequest $request)
-	{
-		$responce = new getFileListResponce();
-		if (is_string($request->directory))
-		{
-			if(is_dir($request->directory))
-			{
-				$tryScan = scandir($request->directory);
-				$responce->fileNames = array_diff($tryScan, array('..', '.'));
-				if (!$tryScan)
-				{
-					$responce->status = InternalError;
-				}
-				else
-				{
-					$responce->status = OK;
-				}
-			}
-			else
-			{
-				$responce->status = NotFound;
-			}
-		}
-		else
-		{
-			$responce->status = BadRequest;
-		}
-		
-		return $responce;
-	}
-	
-	class getFileMetadataRequest extends request
-	{
-		public $fileName;
-	}
-	
-	class getFileMetadataResponce extends responce
-	{
-		public $fileMetadata = array();
-	}
-	
-	function getFileMetadata(getFileMetadataRequest $request)
-	{
-		$responce = new getFileMetadataResponce();
-		if (is_string($request->fileName))
-		{
-			if(is_readable($request->fileName))
-			{
-				$responce->fileMetadata = stat($request->fileName);
-				if (!$responce->fileMetadata)
-				{
-					$responce->status = InternalError;
-				}
-				else
-				{
-					$responce->status = OK;
-				}
-			}
-			else
-			{
-				$responce->status = NotFound;
-			}
-		}
-		else
-		{
-			$responce->status = BadRequest;
-		}
-		
-		return $responce;
-	}
-	
-	class getFileRequest extends request
-	{
-		public $fileName;
-	}
-	
-	// Stub
-	class getFileResponce extends responce
-	{
-	}
-	
-	function getFile(getFileRequest $request)
-	{
-		$responce = new getFileResponce();
-		if (is_string($request->fileName))
-		{
-			if(is_readable($request->fileName))
-			{
-				header('Content-Description: File Transfer');
-				header('Content-Type: application/octet-stream');
-				header('Content-Disposition: attachment; filename="'.basename($request->fileName).'"');
-				header('Expires: 0');
-				header('Cache-Control: must-revalidate');
-				header('Pragma: public');
-				header('Content-Length: ' . filesize($request->fileName));
-				readfile($request->fileName);
-				$responce->status = OK;
-			}
-			else
-			{
-				$responce->status = NotFound;
-			}
-		}
-		else
-		{
-			$responce->status = BadRequest;
-		}
-		
-		return $responce;
-	}
-	
-	class uploadFileRequest extends request
-	{
-		public $fileName;
-		public $rawData;
-	}
-	
-	// Stub
-	class uploadFileResponce extends responce
-	{
-	}
-	
-	function uploadFile(uploadFileRequest $request)
-	{
-		$responce = new uploadFileResponce();
-		if (is_string($request->fileName))
-		{
-			if(!file_exists($request->fileName) && !file_exists($request->fileName.'.gz'))
-			{
-				$needEncoding = 0;
-				if (substr($request->fileName, -3) != '.gz')
-				{
-					$request->fileName = $request->fileName.'.gz';
-					$needEncoding = 1;
-				}
-					
-				if ($fStream = @fopen($request->fileName, "wb"))
-				{
-					fwrite($fStream, $needEncoding ? gzencode($request->rawData) : $request->rawData);
-					$responce->status = OK;
-					fclose($fStream);
-				}
-				else
-				{
-					$responce->status = Forbidden;
-				}		
-			}
-			else
-			{
-				$responce->status = Conflict;
-			}
-		}
-		else
-		{
-			$responce->status = BadRequest;
-		}
-		
-		return $responce;
-	}
-	
-	function reloadFile(uploadFileRequest $request)
-	{
-		$responce = new uploadFileResponce();
-		if (is_string($request->fileName))
-		{
-			if(file_exists($request->fileName) || file_exists($request->fileName.'.gz'))
-			{
-				$needEncoding = 0;
-				if (substr($request->fileName, -3) != '.gz')
-				{
-					$request->fileName = $request->fileName.'.gz';
-					$needEncoding = 1;
-				}
-				
-				if ($fStream = @fopen($request->fileName, "wb"))
-				{
-					fwrite($fStream, $needEncoding ? gzencode($request->rawData) : $request->rawData);
-					$responce->status = OK;
-					fclose($fStream);
-				}
-				else
-				{
-					$responce->status = Forbidden;
-				}		
-			}
-			else
-			{
-				// Probably we could just create new file and return OK here 
-				$responce->status = NotFound;
-			}
-		}
-		else
-		{
-			$responce->status = BadRequest;
-		}
-		
-		return $responce;
-	}
+    $method = $_SERVER['REQUEST_METHOD'];
+    $request = explode('/', substr(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH),1));
+    $input = $_REQUEST;
+    
+    // Our assumptions:
+    // $request[0] - here be "testapi" due to .htaccess properties
+    // $request[1] possible variants: "files", "metadata"
+    // $request[2] and further: path to file/folder; path for creating/updating file
+    if (count($request) < 2)
+    {
+        $responce = new \Base\responce();
+        $responce->status = \Base\NotFound;
+    }  
+    else if ($request[1] != "files" && $request[1] != "metadata")
+    {
+        $responce = new \Base\responce();
+        $responce->status = \Base\NotFound;
+    }
+    else
+    {
+        $path = urldecode(implode('/', array_slice($request, 2)));
+        switch ($method) {
+            case 'GET':
+                if ($request[1] == "metadata")
+                {
+                    $request = new \GetFileMetadata\getFileMetadataRequest();
+                    $request->fileName = $path;
+                    $responce = \GetFileMetadata\getFileMetadata($request);
+                }
+                else {
+                    $request = new \GetFile\getFileRequest();
+                    $request->path = $path;
+                    $responce = \GetFile\getFile($request);
+                }
+                break;
+            case 'PUT':
+                //Update file
+                $request = new \LoadFile\LoadFileRequest();
+                $request->fileName = $path;
+                $request->base64Data = file_get_contents('php://input');
+                $responce = \LoadFile\updateFile($request);
+                break;
+            case 'POST':
+                //Create file                
+                $request = new \LoadFile\LoadFileRequest();
+                $request->fileName = $path;
+                $request->base64Data = file_get_contents('php://input');
+                $responce = \LoadFile\uploadFile($request);
+                break;
+            case 'DELETE':
+                //Not implemented
+        }
+    }
+    
+    http_response_code($responce->status);
+    echo json_encode(get_object_vars($responce));
 }
 ?>
